@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chatbox</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">🤖</div>
+        <div>
+          <div class="title">Gemini Chat</div>
+          <div class="subtitle">Upload nhiều file, preview ảnh, đọc nội dung + OCR</div>
+        </div>
+      </div>
+      <button class="icon-btn" id="themeToggle" onclick="toggleTheme()">🌙</button>
+    </header>
+
+    <main class="chat">
+      <div id="chatBox" class="chat-box"></div>
+    </main>
+
+    <footer class="composer">
+      <input id="msgInput" class="msg-input" type="text" placeholder="Nhập tin nhắn..."
+             onkeypress="if(event.key==='Enter') sendMessage()">
+
+      <input type="file" id="fileInput" hidden multiple onchange="uploadFiles(event)">
+      <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Upload file">📎</button>
+
+      <button class="send-btn" onclick="sendMessage()">Gửi</button>
+    </footer>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      document.body.classList.toggle("dark");
+      const icon = document.getElementById("themeToggle");
+      icon.textContent = document.body.classList.contains("dark") ? "☀️" : "🌙";
+    }
+
+    function getTime() {
+      const now = new Date();
+      return now.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function appendMessage(sender, content, type) {
+      const box = document.getElementById("chatBox");
+      const msg = document.createElement("div");
+      msg.className = `message ${type}`;
+      msg.innerHTML = `
+        <div class="meta">${sender} • ${getTime()}</div>
+        <div class="bubble">${content}</div>
+      `;
+      box.appendChild(msg);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function escapeHtml(s) {
+      return s
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById("msgInput");
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+
+      appendMessage("Bạn", escapeHtml(text), "user");
+      appendMessage("Gemini", "⌛ Đang gõ...", "bot");
+
+      const res = await fetch("/send_message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text })
+      });
+
+      const data = await res.json();
+      const box = document.getElementById("chatBox");
+      box.lastChild?.remove(); // remove typing
+
+      appendMessage("Gemini", escapeHtml(data.message || "❌ Không có phản hồi"), "bot");
+    }
+
+    function uploadFiles(event) {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      const formData = new FormData();
+      for (const f of files) {
+        formData.append("files", f);
+        appendMessage("Bạn", `📤 Upload: <b>${escapeHtml(f.name)}</b>`, "user");
+      }
+
+      fetch("/upload", { method: "POST", body: formData })
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) {
+            appendMessage("Gemini", `❌ ${escapeHtml(data.error)}`, "bot");
+            return;
+          }
+
+          (data.files || []).forEach(item => {
+            if (item.error) {
+              appendMessage("Gemini", `❌ ${escapeHtml(item.filename || "file")}: ${escapeHtml(item.error)}`, "bot");
+              return;
+            }
+
+            const isImg = item.mimetype && item.mimetype.startsWith("image/");
+            const preview = isImg
+              ? `<div class="file-card">
+                   <div class="file-name">🖼️ ${escapeHtml(item.filename)}</div>
+                   <img src="${item.file_url}" class="preview-img" />
+                 </div>`
+              : `<div class="file-card">
+                   <div class="file-name">📄 <a class="file-link" href="${item.file_url}" download>${escapeHtml(item.filename)}</a></div>
+                 </div>`;
+
+            appendMessage("Bạn", preview, "user");
+
+            if (item.file_content) {
+              const safeText = escapeHtml(item.file_content).replaceAll("\n", "<br>");
+              appendMessage(
+                "Gemini",
+                `<div class="extract">
+                   <div class="extract-title">Nội dung trích xuất: <b>${escapeHtml(item.filename)}</b></div>
+                   <div class="extract-body">${safeText}</div>
+                 </div>`,
+                "bot"
+              );
+            }
+          });
+        })
+        .catch(err => appendMessage("Gemini", `❌ Upload lỗi: ${escapeHtml(String(err))}`, "bot"))
+        .finally(() => {
+          event.target.value = "";
+        });
+    }
+  </script>
+</body>
+</html>
