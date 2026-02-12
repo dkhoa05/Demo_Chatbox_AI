@@ -1,146 +1,87 @@
-<!DOCTYPE html>
-<html lang="vi">
+<!doctype html>
+<html lang="vi" data-theme="light">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Chatbox</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chatbox Gemini</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <div class="logo">🤖</div>
+        <div class="logo">G</div>
         <div>
-          <div class="title">Gemini Chat</div>
-          <div class="subtitle">Upload nhiều file, preview ảnh, đọc nội dung + OCR</div>
+          <div class="title">Chatbox Gemini</div>
+          <div class="subtitle">Make by Dang Khoa</div>
         </div>
       </div>
-      <button class="icon-btn" id="themeToggle" onclick="toggleTheme()">🌙</button>
+
+      <div class="actions">
+        <button id="themeBtn" class="btn ghost" type="button" title="Toggle theme">
+          <span class="dot"></span>
+          <span id="themeText">Light</span>
+        </button>
+      </div>
     </header>
 
-    <main class="chat">
-      <div id="chatBox" class="chat-box"></div>
+    <main class="grid">
+      <!-- Chat panel -->
+      <section class="card chat">
+        <div class="card-head">
+          <div class="tabs">
+            <button class="tab active" type="button">Chat</button>
+          </div>
+          <div class="hint">Enter để gửi · Shift+Enter xuống dòng</div>
+        </div>
+
+        <div id="chatBody" class="chat-body">
+          <div class="msg bot">
+            <!-- <div class="bubble">
+              Chào Bro.<br>Upload file xong thì bấm “Attach to chat” hoặc chat sẽ tự mang nội dung file theo.
+            </div> -->
+          </div>
+        </div>
+
+        <div class="composer">
+          <textarea id="msg" placeholder="Nhập tin nhắn..." rows="1"></textarea>
+          <button id="sendBtn" class="btn primary" type="button">Gửi</button>
+        </div>
+
+        <div class="footnote">
+          Chatbot sử dụng Gemini 2.0 Flash, một mô hình ngôn ngữ tiên tiến của Google, để hiểu và phản hồi các tin nhắn của bạn một cách tự nhiên và thông minh.
+        </div>
+      </section>
+
+      <!-- Upload panel -->
+      <section class="card upload">
+        <div class="card-head">
+          <div class="tabs">
+            <button class="tab active" type="button">Upload</button>
+          </div>
+          <div class="hint">txt/pdf/docx/csv/jpg/png</div>
+        </div>
+
+        <div id="drop" class="dropzone">
+          <div class="dz-title">Kéo thả file vào đây</div>
+          <div class="dz-sub">hoặc click để chọn file</div>
+          <input id="fileInput" type="file" multiple />
+        </div>
+
+        <div class="row">
+          <button id="uploadBtn" class="btn" type="button">Upload</button>
+          <button id="attachBtn" class="btn ghost" type="button" disabled>Attach to chat</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section-title">Kết quả</div>
+        <div id="files" class="files"></div>
+      </section>
     </main>
-
-    <footer class="composer">
-      <input id="msgInput" class="msg-input" type="text" placeholder="Nhập tin nhắn..."
-             onkeypress="if(event.key==='Enter') sendMessage()">
-
-      <input type="file" id="fileInput" hidden multiple onchange="uploadFiles(event)">
-      <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Upload file">📎</button>
-
-      <button class="send-btn" onclick="sendMessage()">Gửi</button>
-    </footer>
   </div>
 
-  <script>
-    function toggleTheme() {
-      document.body.classList.toggle("dark");
-      const icon = document.getElementById("themeToggle");
-      icon.textContent = document.body.classList.contains("dark") ? "☀️" : "🌙";
-    }
-
-    function getTime() {
-      const now = new Date();
-      return now.toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' });
-    }
-
-    function appendMessage(sender, content, type) {
-      const box = document.getElementById("chatBox");
-      const msg = document.createElement("div");
-      msg.className = `message ${type}`;
-      msg.innerHTML = `
-        <div class="meta">${sender} • ${getTime()}</div>
-        <div class="bubble">${content}</div>
-      `;
-      box.appendChild(msg);
-      box.scrollTop = box.scrollHeight;
-    }
-
-    function escapeHtml(s) {
-      return s
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;");
-    }
-
-    async function sendMessage() {
-      const input = document.getElementById("msgInput");
-      const text = input.value.trim();
-      if (!text) return;
-      input.value = "";
-
-      appendMessage("Bạn", escapeHtml(text), "user");
-      appendMessage("Gemini", "⌛ Đang gõ...", "bot");
-
-      const res = await fetch("/send_message", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text })
-      });
-
-      const data = await res.json();
-      const box = document.getElementById("chatBox");
-      box.lastChild?.remove(); // remove typing
-
-      appendMessage("Gemini", escapeHtml(data.message || "❌ Không có phản hồi"), "bot");
-    }
-
-    function uploadFiles(event) {
-      const files = event.target.files;
-      if (!files || files.length === 0) return;
-
-      const formData = new FormData();
-      for (const f of files) {
-        formData.append("files", f);
-        appendMessage("Bạn", `📤 Upload: <b>${escapeHtml(f.name)}</b>`, "user");
-      }
-
-      fetch("/upload", { method: "POST", body: formData })
-        .then(res => res.json())
-        .then(data => {
-          if (data.error) {
-            appendMessage("Gemini", `❌ ${escapeHtml(data.error)}`, "bot");
-            return;
-          }
-
-          (data.files || []).forEach(item => {
-            if (item.error) {
-              appendMessage("Gemini", `❌ ${escapeHtml(item.filename || "file")}: ${escapeHtml(item.error)}`, "bot");
-              return;
-            }
-
-            const isImg = item.mimetype && item.mimetype.startsWith("image/");
-            const preview = isImg
-              ? `<div class="file-card">
-                   <div class="file-name">🖼️ ${escapeHtml(item.filename)}</div>
-                   <img src="${item.file_url}" class="preview-img" />
-                 </div>`
-              : `<div class="file-card">
-                   <div class="file-name">📄 <a class="file-link" href="${item.file_url}" download>${escapeHtml(item.filename)}</a></div>
-                 </div>`;
-
-            appendMessage("Bạn", preview, "user");
-
-            if (item.file_content) {
-              const safeText = escapeHtml(item.file_content).replaceAll("\n", "<br>");
-              appendMessage(
-                "Gemini",
-                `<div class="extract">
-                   <div class="extract-title">Nội dung trích xuất: <b>${escapeHtml(item.filename)}</b></div>
-                   <div class="extract-body">${safeText}</div>
-                 </div>`,
-                "bot"
-              );
-            }
-          });
-        })
-        .catch(err => appendMessage("Gemini", `❌ Upload lỗi: ${escapeHtml(String(err))}`, "bot"))
-        .finally(() => {
-          event.target.value = "";
-        });
-    }
-  </script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
